@@ -36,7 +36,7 @@ jobs:
             --exclude=SC1091,SC2034,SC3045
 
   build:
-    name: Build (${{ matrix.target }})
+    name: Build (${{ matrix.target }}-${{ matrix.subtarget }})
     runs-on: ubuntu-22.04
     needs: lint
 
@@ -44,121 +44,90 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64
-            subtarget: generic
-            config: |
-              CONFIG_TARGET_x86=y
-              CONFIG_TARGET_x86_64=y
+          - target: x86
+            subtarget: 64
+            sdk_url: https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
 
           - target: ramips
             subtarget: mt7621
-            config: |
-              CONFIG_TARGET_ramips=y
-              CONFIG_TARGET_ramips_mt7621=y
+            sdk_url: https://downloads.openwrt.org/releases/23.05.3/targets/ramips/mt7621/openwrt-sdk-23.05.3-ramips-mt7621_gcc-12.3.0_musl.Linux-x86_64.tar.xz
 
           - target: ath79
             subtarget: generic
-            config: |
-              CONFIG_TARGET_ath79=y
-              CONFIG_TARGET_ath79_generic=y
+            sdk_url: https://downloads.openwrt.org/releases/23.05.3/targets/ath79/generic/openwrt-sdk-23.05.3-ath79-generic_gcc-12.3.0_musl.Linux-x86_64.tar.xz
 
           - target: mediatek
             subtarget: mt7622
-            config: |
-              CONFIG_TARGET_mediatek=y
-              CONFIG_TARGET_mediatek_mt7622=y
+            sdk_url: https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/mt7622/openwrt-sdk-23.05.3-mediatek-mt7622_gcc-12.3.0_musl.Linux-x86_64.tar.xz
 
     steps:
       - name: Checkout plugin source
         uses: actions/checkout@v4
-        with:
-          path: plugin
 
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update -q
           sudo apt-get install -y \
             build-essential \
             libncurses5-dev \
-            libncursesw5-dev \
             zlib1g-dev \
             gawk \
             git \
             gettext \
             libssl-dev \
-            xsltproc \
             rsync \
-            wget \
             unzip \
             python3 \
-            curl \
-            file
+            wget \
+            curl
 
-      - name: Cache LEDE toolchain
+      - name: Cache SDK
+        id: cache-sdk
         uses: actions/cache@v4
         with:
-          path: |
-            lede/staging_dir/host
-            lede/staging_dir/toolchain-*
-          key: lede-${{ matrix.target }}-${{ matrix.subtarget }}-${{ github.sha }}
-          restore-keys: |
-            lede-${{ matrix.target }}-${{ matrix.subtarget }}-
+          path: sdk
+          key: sdk-${{ matrix.target }}-${{ matrix.subtarget }}-23.05.3
 
-      - name: Checkout Lean LEDE
+      - name: Download OpenWrt SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
-          if [ ! -d lede/.git ]; then
-            git clone --depth 1 \
-              https://github.com/coolsnowwolf/lede lede
-          fi
-        timeout-minutes: 20
+          mkdir -p sdk
+          wget -q --show-progress \
+            "${{ matrix.sdk_url }}" \
+            -O sdk.tar.xz
+          tar -xf sdk.tar.xz -C sdk --strip-components=1
+          rm sdk.tar.xz
 
-      - name: Place plugin into LEDE
+      - name: Setup SDK feeds
         run: |
-          mkdir -p lede/package/lean/luci-app-qmodem-failover
-          rsync -a --delete \
-            --exclude='.git' \
-            --exclude='.github' \
-            plugin/ lede/package/lean/luci-app-qmodem-failover/
+          cd sdk
+          cat feeds.conf.default || true
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-      - name: Update feeds
-        working-directory: lede
+      - name: Copy plugin into SDK
         run: |
-          ./scripts/feeds update base luci packages
-          ./scripts/feeds install -a -p luci
-          ./scripts/feeds install -a -p packages
-        timeout-minutes: 30
+          mkdir -p sdk/package/luci-app-qmodem-failover
+          rsync -a --exclude='.git' --exclude='.github' \
+            ./ sdk/package/luci-app-qmodem-failover/
 
-      - name: Configure for ${{ matrix.target }}
-        working-directory: lede
+      - name: Compile plugin
         run: |
-          printf '${{ matrix.config }}\n' > .config
-          printf 'CONFIG_PACKAGE_luci-app-qmodem-failover=m\n' >> .config
+          cd sdk
+          echo "CONFIG_PACKAGE_luci-app-qmodem-failover=m" >> .config
           make defconfig
-          grep -q "luci-app-qmodem-failover" .config \
-            && echo "✅ 插件配置确认" \
-            || { echo "❌ 插件配置丢失"; exit 1; }
-
-      - name: Build toolchain
-        working-directory: lede
-        run: |
-          make tools/compile -j$(nproc) V=w 2>&1 | tail -5
-          make toolchain/compile -j$(nproc) V=w 2>&1 | tail -5
-        timeout-minutes: 120
-
-      - name: Compile plugin IPK
-        working-directory: lede
-        run: |
-          make package/lean/luci-app-qmodem-failover/compile \
-            -j$(nproc) V=s 2>&1 | tail -30
+          make package/luci-app-qmodem-failover/compile \
+            -j$(nproc) V=s 2>&1 | tail -20
           find bin/ -name "*qmodem-failover*.ipk" | grep -q . \
+            && echo "✅ IPK生成成功" \
             || { echo "❌ IPK未生成"; exit 1; }
-        timeout-minutes: 30
 
       - name: Collect IPK
         run: |
           mkdir -p output
-          find lede/bin -name "*qmodem-failover*.ipk" \
+          find sdk/bin -name "*qmodem-failover*.ipk" \
             -exec cp {} output/ \;
+          echo "=== 生成的IPK文件 ==="
           ls -lah output/
 
       - name: Upload artifact
@@ -195,7 +164,9 @@ jobs:
           body: |
             ## 安装方法
             ```bash
+            # 上传到路由器
             scp luci-app-qmodem-failover_*_all.ipk root@192.168.1.1:/tmp/
+            # 路由器上安装
             opkg update
             opkg install /tmp/luci-app-qmodem-failover_*_all.ipk
             ```
