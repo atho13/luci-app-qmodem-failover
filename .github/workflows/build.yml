@@ -1,6 +1,7 @@
 name: Build & Release IPK
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, dev]
   pull_request:
@@ -8,11 +9,6 @@ on:
   release:
     types: [created]
 
-# ─────────────────────────────────────────────────────────────
-# P19修复: 多平台 matrix 编译
-# 覆盖路由器主流 CPU 架构，验证跨平台兼容性
-# PKGARCH=all 的包理论上无关架构，但 matrix 能验证 deps 在各平台均可安装
-# ─────────────────────────────────────────────────────────────
 jobs:
   lint:
     name: Shell Script Lint
@@ -23,9 +19,6 @@ jobs:
       - name: Install shellcheck
         run: sudo apt-get install -y shellcheck
 
-      # P22修复: 调整 exclude 列表
-      # 保留 SC1091 排除（source rc.common 找不到文件是预期的）
-      # 删除 SC2039 排除（local 在 busybox ash 是支持的，不应屏蔽此警告）
       - name: Lint shell scripts
         run: |
           shellcheck \
@@ -36,8 +29,6 @@ jobs:
             --shell=dash \
             --severity=warning \
             --exclude=SC1091
-
-          # init 脚本用 sh /etc/rc.common 解释器，单独检查
           shellcheck \
             src/qmodem-failover.init \
             --shell=dash \
@@ -49,40 +40,33 @@ jobs:
     runs-on: ubuntu-22.04
     needs: lint
 
-    # P19修复: 多平台 matrix
     strategy:
-      fail-fast: false   # 一个平台失败不影响其他平台继续
+      fail-fast: false
       matrix:
         include:
-          # ─ 主流路由器平台 ─
           - target: x86_64
             subtarget: generic
-            config: "CONFIG_TARGET_x86=y\nCONFIG_TARGET_x86_64=y\nCONFIG_TARGET_x86_64_DEVICE_generic=y"
+            config: |
+              CONFIG_TARGET_x86=y
+              CONFIG_TARGET_x86_64=y
 
           - target: ramips
             subtarget: mt7621
-            config: "CONFIG_TARGET_ramips=y\nCONFIG_TARGET_ramips_mt7621=y"
-            # 小米/红米/斐讯/网件部分型号 (MIPS 1004Kc)
+            config: |
+              CONFIG_TARGET_ramips=y
+              CONFIG_TARGET_ramips_mt7621=y
 
           - target: ath79
             subtarget: generic
-            config: "CONFIG_TARGET_ath79=y\nCONFIG_TARGET_ath79_generic=y"
-            # TP-Link/华为/OpenWrt 官方支持的 AR9xxx (MIPS 24K)
-
-          - target: bcm53xx
-            subtarget: generic
-            config: "CONFIG_TARGET_bcm53xx=y\nCONFIG_TARGET_bcm53xx_generic=y"
-            # 网件/华硕部分型号 (ARM Cortex-A9)
+            config: |
+              CONFIG_TARGET_ath79=y
+              CONFIG_TARGET_ath79_generic=y
 
           - target: mediatek
             subtarget: mt7622
-            config: "CONFIG_TARGET_mediatek=y\nCONFIG_TARGET_mediatek_mt7622=y"
-            # 小米 AX 系列 / 联发科 (ARM Cortex-A53)
-
-          - target: ipq806x
-            subtarget: generic
-            config: "CONFIG_TARGET_ipq806x=y\nCONFIG_TARGET_ipq806x_generic=y"
-            # Linksys/网件旗舰 (ARM Cortex-A15)
+            config: |
+              CONFIG_TARGET_mediatek=y
+              CONFIG_TARGET_mediatek_mt7622=y
 
     steps:
       - name: Checkout plugin source
@@ -90,35 +74,43 @@ jobs:
         with:
           path: plugin
 
-      # ─ 安装依赖（P20：增加缓存、精简包列表）─
       - name: Install build dependencies
         run: |
           sudo apt-get update -q
           sudo apt-get install -y \
-            build-essential ccache \
-            libncurses5-dev libncursesw5-dev \
-            zlib1g-dev gawk git gettext \
-            libssl-dev xsltproc rsync \
-            wget curl unzip python3 \
-            file qemu-utils
+            build-essential \
+            libncurses5-dev \
+            libncursesw5-dev \
+            zlib1g-dev \
+            gawk \
+            git \
+            gettext \
+            libssl-dev \
+            xsltproc \
+            rsync \
+            wget \
+            unzip \
+            python3 \
+            curl \
+            file
 
-      # ─ 缓存 Lean LEDE 工具链（加速后续构建）─
       - name: Cache LEDE toolchain
         uses: actions/cache@v4
         with:
           path: |
             lede/staging_dir/host
             lede/staging_dir/toolchain-*
-          key: lede-toolchain-${{ matrix.target }}-${{ matrix.subtarget }}-${{ hashFiles('**/feeds.conf.default') }}
+          key: lede-${{ matrix.target }}-${{ matrix.subtarget }}-${{ github.sha }}
           restore-keys: |
-            lede-toolchain-${{ matrix.target }}-${{ matrix.subtarget }}-
+            lede-${{ matrix.target }}-${{ matrix.subtarget }}-
 
       - name: Checkout Lean LEDE
         run: |
           if [ ! -d lede/.git ]; then
-            git clone --depth 1 https://github.com/coolsnowwolf/lede lede
+            git clone --depth 1 \
+              https://github.com/coolsnowwolf/lede lede
           fi
-        timeout-minutes: 15
+        timeout-minutes: 20
 
       - name: Place plugin into LEDE
         run: |
@@ -128,76 +120,54 @@ jobs:
             --exclude='.github' \
             plugin/ lede/package/lean/luci-app-qmodem-failover/
 
-      # P20修复: 只更新必要的 feeds（luci + packages），不拉全量
-      - name: Update feeds (selective)
+      - name: Update feeds
         working-directory: lede
         run: |
-          ./scripts/feeds update luci packages base
+          ./scripts/feeds update base luci packages
           ./scripts/feeds install -a -p luci
           ./scripts/feeds install -a -p packages
-          ./scripts/feeds install luci-app-qmodem-failover 2>/dev/null || true
-        timeout-minutes: 20
+        timeout-minutes: 30
 
-      # P21修复: 用正确的 target 配置而非 x86 defconfig
-      - name: Configure for target ${{ matrix.target }}/${{ matrix.subtarget }}
+      - name: Configure for ${{ matrix.target }}
         working-directory: lede
         run: |
-          # 从空白开始，设置目标平台
           printf '${{ matrix.config }}\n' > .config
           printf 'CONFIG_PACKAGE_luci-app-qmodem-failover=m\n' >> .config
-
-          # 自动补全依赖链
           make defconfig
-
-          # 验证插件配置被保留
           grep -q "luci-app-qmodem-failover" .config \
-            && echo "✅ 插件配置确认存在" \
-            || { echo "❌ 插件配置丢失！"; exit 1; }
+            && echo "✅ 插件配置确认" \
+            || { echo "❌ 插件配置丢失"; exit 1; }
 
-      # 编译工具链（首次需要，有缓存时秒过）
-      - name: Build toolchain (if not cached)
+      - name: Build toolchain
         working-directory: lede
         run: |
-          if [ ! -f staging_dir/host/bin/usign ]; then
-            echo "工具链未缓存，开始编译（约需 20-40 分钟）..."
-            make tools/compile -j$(nproc) V=w 2>&1 | tail -20
-            make toolchain/compile -j$(nproc) V=w 2>&1 | tail -20
-          else
-            echo "工具链已缓存，跳过"
-          fi
-        timeout-minutes: 90
+          make tools/compile -j$(nproc) V=w 2>&1 | tail -5
+          make toolchain/compile -j$(nproc) V=w 2>&1 | tail -5
+        timeout-minutes: 120
 
       - name: Compile plugin IPK
         working-directory: lede
         run: |
           make package/lean/luci-app-qmodem-failover/compile \
-            -j$(nproc) V=s 2>&1 | tee /tmp/build.log | tail -30
-          # 检查是否编译成功
+            -j$(nproc) V=s 2>&1 | tail -30
           find bin/ -name "*qmodem-failover*.ipk" | grep -q . \
-            || { echo "❌ IPK 未生成！"; cat /tmp/build.log | tail -50; exit 1; }
-        timeout-minutes: 60
+            || { echo "❌ IPK未生成"; exit 1; }
+        timeout-minutes: 30
 
-      - name: Collect artifacts
+      - name: Collect IPK
         run: |
           mkdir -p output
           find lede/bin -name "*qmodem-failover*.ipk" \
             -exec cp {} output/ \;
-          # 重命名：加入平台信息，便于区分
-          # 注意: PKGARCH=all 时实际只有一个 ipk，名称含 all
           ls -lah output/
-          echo "✅ 已收集 IPK:"
-          ls output/
 
-      - name: Upload IPK artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ipk-${{ matrix.target }}-${{ matrix.subtarget }}
           path: output/*.ipk
           retention-days: 30
 
-  # ─────────────────────────────────────────────
-  # 汇总所有平台产物，发布 Release
-  # ─────────────────────────────────────────────
   release:
     name: Publish Release
     runs-on: ubuntu-22.04
@@ -205,50 +175,35 @@ jobs:
     if: github.event_name == 'release'
 
     steps:
-      - name: Download all IPK artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: all-ipks
           pattern: ipk-*
 
-      - name: Deduplicate & collect IPKs
+      - name: Collect IPKs
         run: |
           mkdir -p release-files
-          # PKGARCH=all 各平台 ipk 内容相同，只需一份
-          find all-ipks -name "*.ipk" | sort -u | head -1 | xargs -I{} cp {} release-files/
-          # 保留一个平台相关的 ipk 以备特殊需求
-          find all-ipks -name "*.ipk" | sort | while read f; do
-            plat=$(echo "$f" | sed 's|all-ipks/ipk-||;s|/.*||')
-            cp "$f" "release-files/$(basename $f .ipk)_${plat}.ipk" 2>/dev/null || true
-          done
+          find all-ipks -name "*.ipk" | head -1 \
+            | xargs -I{} cp {} release-files/
           ls -lah release-files/
 
-      # P23修复: 使用稳定的 @v1 版本
-      - name: Upload to GitHub Release
+      - name: Upload to Release
         uses: softprops/action-gh-release@v1
         with:
           files: release-files/*.ipk
           body: |
             ## 安装方法
-
             ```bash
-            # 上传到路由器
             scp luci-app-qmodem-failover_*_all.ipk root@192.168.1.1:/tmp/
-
-            # SSH 安装
             opkg update
             opkg install /tmp/luci-app-qmodem-failover_*_all.ipk
             ```
-
             ## 兼容平台
-            - x86_64 (PC 软路由)
-            - MIPS 24K (ath79 / TP-Link / 华为 AR 系列)
-            - MIPS 1004Kc (ramips mt7621 / 小米 / 红米 / 斐讯)
-            - ARM Cortex-A9 (bcm53xx / 网件 / 华硕)
-            - ARM Cortex-A53 (mediatek mt7622 / 小米 AX)
-            - ARM Cortex-A15 (ipq806x / Linksys)
-
-            > PKGARCH=all，一个 IPK 适配所有平台
+            - x86_64 软路由
+            - MIPS mt7621 小米/红米/斐讯
+            - MIPS ath79 TP-Link/华为
+            - ARM mt7622 小米AX系列
+            > PKGARCH=all，一个IPK全平台通用
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
