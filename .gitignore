@@ -1,0 +1,21 @@
+# OpenWrt 编译产物
+*.ipk
+*.o
+*.a
+build_dir/
+staging_dir/
+bin/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*~
+
+# macOS
+.DS_Store
+
+# 临时文件
+*.tmp
+*.log
+
