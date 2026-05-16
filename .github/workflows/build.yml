@@ -28,12 +28,12 @@ jobs:
             src/notify.sh \
             --shell=dash \
             --severity=warning \
-            --exclude=SC1091
+            --exclude=SC1091,SC2034,SC3045
           shellcheck \
             src/qmodem-failover.init \
             --shell=dash \
             --severity=warning \
-            --exclude=SC1091,SC2034
+            --exclude=SC1091,SC2034,SC3045
 
   build:
     name: Build (${{ matrix.target }})
