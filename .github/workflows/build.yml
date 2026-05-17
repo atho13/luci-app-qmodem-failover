@@ -63,6 +63,8 @@ jobs:
     steps:
       - name: Checkout plugin source
         uses: actions/checkout@v4
+        with:
+          path: plugin
 
       - name: Install dependencies
         run: |
@@ -81,53 +83,63 @@ jobs:
             wget \
             curl
 
-      - name: Cache SDK
-        id: cache-sdk
-        uses: actions/cache@v4
-        with:
-          path: sdk
-          key: sdk-${{ matrix.target }}-${{ matrix.subtarget }}-23.05.3
-
-      - name: Download OpenWrt SDK
-        if: steps.cache-sdk.outputs.cache-hit != 'true'
+      - name: Download and extract SDK
         run: |
-          mkdir -p sdk
           wget -q --show-progress \
             "${{ matrix.sdk_url }}" \
             -O sdk.tar.xz
+          mkdir -p sdk
           tar -xf sdk.tar.xz -C sdk --strip-components=1
           rm sdk.tar.xz
+          echo "=== SDK目录结构 ==="
+          ls sdk/
 
-      - name: Setup SDK feeds
+      - name: Copy plugin into SDK packages
+        run: |
+          PKG_DIR="sdk/package/luci-app-qmodem-failover"
+          echo "=== 清空并创建插件目录 ==="
+          rm -rf "$PKG_DIR"
+          mkdir -p "$PKG_DIR"
+          echo "=== 复制文件 ==="
+          cp    plugin/Makefile  "$PKG_DIR/"
+          cp -r plugin/src       "$PKG_DIR/"
+          cp -r plugin/luasrc    "$PKG_DIR/"
+          cp -r plugin/htdocs    "$PKG_DIR/"
+          cp -r plugin/po        "$PKG_DIR/"
+          echo "=== 验证插件目录（不能包含sdk子目录）==="
+          ls -la "$PKG_DIR/"
+          if ls "$PKG_DIR/" | grep -q "^sdk$"; then
+            echo "❌ 发现sdk子目录，中止！"
+            exit 1
+          fi
+          echo "✅ 插件目录干净"
+
+      - name: Update feeds
         run: |
           cd sdk
-          cat feeds.conf.default || true
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Copy plugin into SDK
-        run: |
-          mkdir -p sdk/package/luci-app-qmodem-failover
-          rsync -a --exclude='.git' --exclude='.github' \
-            ./ sdk/package/luci-app-qmodem-failover/
-
-      - name: Compile plugin
+      - name: Configure and compile
         run: |
           cd sdk
-          echo "CONFIG_PACKAGE_luci-app-qmodem-failover=m" >> .config
-          make defconfig
+          echo "CONFIG_PACKAGE_luci-app-qmodem-failover=m" > .config
+          make defconfig 2>&1 | tail -5
+          echo "=== 开始编译插件 ==="
           make package/luci-app-qmodem-failover/compile \
-            -j$(nproc) V=s 2>&1 | tail -20
-          find bin/ -name "*qmodem-failover*.ipk" | grep -q . \
-            && echo "✅ IPK生成成功" \
-            || { echo "❌ IPK未生成"; exit 1; }
+            V=s -j$(nproc) 2>&1 | tail -30
+          echo "=== 查找IPK ==="
+          find bin/ -name "*qmodem*.ipk" -ls
+          find bin/ -name "*qmodem*.ipk" | grep -q . \
+            && echo "✅ 编译成功" \
+            || { echo "❌ IPK未找到"; exit 1; }
 
       - name: Collect IPK
         run: |
           mkdir -p output
-          find sdk/bin -name "*qmodem-failover*.ipk" \
+          find sdk/bin -name "*qmodem*.ipk" \
             -exec cp {} output/ \;
-          echo "=== 生成的IPK文件 ==="
+          echo "=== 输出文件 ==="
           ls -lah output/
 
       - name: Upload artifact
@@ -164,9 +176,7 @@ jobs:
           body: |
             ## 安装方法
             ```bash
-            # 上传到路由器
             scp luci-app-qmodem-failover_*_all.ipk root@192.168.1.1:/tmp/
-            # 路由器上安装
             opkg update
             opkg install /tmp/luci-app-qmodem-failover_*_all.ipk
             ```
@@ -175,6 +185,6 @@ jobs:
             - MIPS mt7621 小米/红米/斐讯
             - MIPS ath79 TP-Link/华为
             - ARM mt7622 小米AX系列
-            > PKGARCH=all，一个IPK全平台通用
+            > PKGARCH=all 一个IPK全平台通用
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
