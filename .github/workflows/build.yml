@@ -53,9 +53,9 @@ jobs:
             subtarget: 64
             sdk_url: https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
             
-          # Target 2: ARM64 STB Amlogic (HG680P, B860H, dll.)
-          - target: meson
-            subtarget: generic
+          # Target 2: ARM64 STB (Amlogic, Rockchip, dll.) -> SUDAH DISELARASKAN DENGAN LINK SDK
+          - target: armsr
+            subtarget: armv8
             sdk_url: https://downloads.openwrt.org/releases/24.10.7/targets/armsr/armv8/openwrt-sdk-24.10.7-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
 
     steps:
@@ -182,7 +182,7 @@ jobs:
             ```
             ## Kompatibilitas Sistem (Dikompilasi via SDK 24.10.7 Terbaru)
             - **x86_64** (PC / Mini PC / Router X86 / Proxmox)
-            - **ARM64 Amlogic** (STB TV Box HG680P, B860H, dll.)
+            - **ARM64 ARMv8** (STB TV Box HG680P, B860H, dll.)
             
             > Catatan: Paket ini menggunakan arsitektur `PKGARCH=all`, sehingga file `.ipk` yang dihasilkan bersifat universal untuk seluruh perangkat di atas.
         env:
