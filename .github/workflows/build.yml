@@ -9,6 +9,10 @@ on:
   release:
     types: [created]
 
+# REVISI 1: Wajib diaktifkan agar akun hasil fork diizinkan mengunggah file ke halaman Release
+permissions:
+  contents: write
+
 jobs:
   lint:
     name: Shell Script Lint
@@ -44,21 +48,35 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # REVISI 2: Target x86 (64-bit) untuk PC / Mini PC / Proxmox
           - target: x86
             subtarget: 64
-            sdk_url: https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+            sdk_url: https://openwrt.org
 
+          # REVISI 3: Target ARM64 STB Amlogic (Arsitektur Meson Generic)
+          - target: meson
+            subtarget: generic
+            sdk_url: https://openwrt.org
+
+          # REVISI 4: Target ARM64 Virtual (Sering digunakan di firmware STB modifikasi Flippy)
+          - target: armvirt
+            subtarget: 64
+            sdk_url: https://openwrt.org
+
+          # Target Router MediaTek (Bawaan repositori asli)
           - target: ramips
             subtarget: mt7621
-            sdk_url: https://downloads.openwrt.org/releases/23.05.3/targets/ramips/mt7621/openwrt-sdk-23.05.3-ramips-mt7621_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+            sdk_url: https://openwrt.org
 
+          # Target Router Qualcomm Atheros (Bawaan repositori asli)
           - target: ath79
             subtarget: generic
-            sdk_url: https://downloads.openwrt.org/releases/23.05.3/targets/ath79/generic/openwrt-sdk-23.05.3-ath79-generic_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+            sdk_url: https://openwrt.org
 
+          # Target Router MediaTek AX (Bawaan repositori asli)
           - target: mediatek
             subtarget: mt7622
-            sdk_url: https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/mt7622/openwrt-sdk-23.05.3-mediatek-mt7622_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+            sdk_url: https://openwrt.org
 
     steps:
       - name: Checkout plugin source
@@ -91,28 +109,28 @@ jobs:
           mkdir -p sdk
           tar -xf sdk.tar.xz -C sdk --strip-components=1
           rm sdk.tar.xz
-          echo "=== SDK目录结构 ==="
+          echo "=== Struktur Direktori SDK ==="
           ls sdk/
 
       - name: Copy plugin into SDK packages
         run: |
           PKG_DIR="sdk/package/luci-app-qmodem-failover"
-          echo "=== 清空并创建插件目录 ==="
+          echo "=== Bersihkan dan Buat Folder Paket ==="
           rm -rf "$PKG_DIR"
           mkdir -p "$PKG_DIR"
-          echo "=== 复制文件 ==="
+          echo "=== Menyalin File Sumber ==="
           cp    plugin/Makefile  "$PKG_DIR/"
           cp -r plugin/src       "$PKG_DIR/"
           cp -r plugin/luasrc    "$PKG_DIR/"
           cp -r plugin/htdocs    "$PKG_DIR/"
           cp -r plugin/po        "$PKG_DIR/"
-          echo "=== 验证插件目录（不能包含sdk子目录）==="
+          echo "=== Validasi Folder Paket ==="
           ls -la "$PKG_DIR/"
           if ls "$PKG_DIR/" | grep -q "^sdk$"; then
-            echo "❌ 发现sdk子目录，中止！"
+            echo "❌ Terdeteksi folder sdk bersarang, batalkan!"
             exit 1
           fi
-          echo "✅ 插件目录干净"
+          echo "✅ Folder paket aman"
 
       - name: Update feeds
         run: |
@@ -125,21 +143,21 @@ jobs:
           cd sdk
           echo "CONFIG_PACKAGE_luci-app-qmodem-failover=m" > .config
           make defconfig 2>&1 | tail -5
-          echo "=== 开始编译插件 ==="
+          echo "=== Memulai Proses Kompilasi ==="
           make package/luci-app-qmodem-failover/compile \
             V=s -j$(nproc) 2>&1 | tail -30
-          echo "=== 查找IPK ==="
+          echo "=== Mencari File IPK ==="
           find bin/ -name "*qmodem*.ipk" -ls
           find bin/ -name "*qmodem*.ipk" | grep -q . \
-            && echo "✅ 编译成功" \
-            || { echo "❌ IPK未找到"; exit 1; }
+            && echo "✅ Kompilasi Berhasil" \
+            || { echo "❌ File IPK Tidak Ditemukan"; exit 1; }
 
       - name: Collect IPK
         run: |
           mkdir -p output
           find sdk/bin -name "*qmodem*.ipk" \
             -exec cp {} output/ \;
-          echo "=== 输出文件 ==="
+          echo "=== Riwayat File Output ==="
           ls -lah output/
 
       - name: Upload artifact
@@ -153,7 +171,8 @@ jobs:
     name: Publish Release
     runs-on: ubuntu-22.04
     needs: build
-    if: github.event_name == 'release'
+    # Memicu pembuatan halaman rilis baik lewat menu Release maupun tombol manual Actions
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Download all artifacts
@@ -165,26 +184,30 @@ jobs:
       - name: Collect IPKs
         run: |
           mkdir -p release-files
-          find all-ipks -name "*.ipk" | head -1 \
-            | xargs -I{} cp {} release-files/
+          # REVISI 5: Menyalin semua IPK tanpa dibatasi head -1 agar paket x86 dan arm64 aman terkumpul bersamaan
+          find all-ipks -name "*.ipk" -exec cp {} release-files/ \;
           ls -lah release-files/
 
       - name: Upload to Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: release-files/*.ipk
+          tag_name: v${{ github.run_number }}
+          name: Release Build v${{ github.run_number }}
           body: |
-            ## 安装方法
+            ## Cara Instalasi di Router / STB
             ```bash
             scp luci-app-qmodem-failover_*_all.ipk root@192.168.1.1:/tmp/
             opkg update
             opkg install /tmp/luci-app-qmodem-failover_*_all.ipk
             ```
-            ## 兼容平台
-            - x86_64 软路由
-            - MIPS mt7621 小米/红米/斐讯
-            - MIPS ath79 TP-Link/华为
-            - ARM mt7622 小米AX系列
-            > PKGARCH=all 一个IPK全平台通用
+            ## Kompatibilitas Perangkat (OpenWrt 23.05.3)
+            - **x86_64** (PC / Mini PC / Router X86 / Proxmox)
+            - **ARM64 Amlogic** (STB TV Box HG680P, B860H, dll.)
+            - **MIPS mt7621** (Xiaomi, Redmi, Phicomm)
+            - **MIPS ath79** (TP-Link, Huawei)
+            - **ARM mt7622** (Xiaomi AX Series)
+            
+            > Catatan: Karena paket ini menggunakan sistem kustomisasi `PKGARCH=all`, file `.ipk` yang dihasilkan bersifat universal untuk seluruh arsitektur di atas.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
