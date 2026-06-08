@@ -1,5 +1,5 @@
-# QMODEM 故障切换 - 中文翻译
-# Location: /usr/lib/lua/luci/i18n/qmodem_failover.zh-cn.po
+# QMODEM Failover - English Translation
+# Location: /usr/lib/lua/luci/i18n/qmodem_failover.en.po
 # Charset: UTF-8
 
 msgid ""
@@ -8,107 +8,106 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 msgid "QMODEM 故障切换"
-msgstr "QMODEM 故障切换"
+msgstr "QMODEM Failover"
 
 msgid "有线 WAN 网络故障时自动切换至 QMODEM 移动网络，恢复后自动切回，全程无感知。"
-msgstr "有线 WAN 网络故障时自动切换至 QMODEM 移动网络，恢复后自动切回，全程无感知。"
+msgstr "Automatically switch to QMODEM cellular network when wired WAN fails, and automatically switch back after recovery without interruption."
 
 msgid "切换状态"
-msgstr "切换状态"
+msgstr "Switching Status"
 
 msgid "基本设置"
-msgstr "基本设置"
+msgstr "Basic Settings"
 
 msgid "启用插件"
-msgstr "启用插件"
+msgstr "Enable Plugin"
 
 msgid "有线 WAN 接口"
-msgstr "有线 WAN 接口"
+msgstr "Wired WAN Interface"
 
 msgid "通常为 eth0 或 wan，可通过 ip link show 查看"
-msgstr "通常为 eth0 或 wan，可通过 ip link show 查看"
+msgstr "Usually eth0 or wan, can be checked via 'ip link show'"
 
 msgid "QMODEM 接口"
-msgstr "QMODEM 接口"
+msgstr "QMODEM Interface"
 
 msgid "USB 网卡通常为 usb0，PPP 拨号为 ppp0"
-msgstr "USB 网卡通常为 usb0，PPP 拨号为 ppp0"
+msgstr "USB NIC is usually usb0, PPP dial-up is ppp0"
 
 msgid "检测间隔（秒）"
-msgstr "检测间隔（秒）"
+msgstr "Check Interval (Seconds)"
 
 msgid "每隔多少秒发起一次 WAN 检测，越小响应越快但 CPU 占用略高，建议 3~5"
-msgstr "每隔多少秒发起一次 WAN 检测，越小响应越快但 CPU 占用略高，建议 3~5"
+msgstr "How many seconds between WAN checks. Lower value responds faster but slightly higher CPU usage. Recommended: 3~5"
 
 msgid "故障判定次数"
-msgstr "故障判定次数"
+msgstr "Failure Count Threshold"
 
 msgid "连续失败多少次后判定 WAN 故障并切换至 LTE，建议 3（约 9 秒）"
-msgstr "连续失败多少次后判定 WAN 故障并切换至 LTE，建议 3（约 9 秒）"
+msgstr "Number of consecutive failures before deciding WAN is faulty and switching to LTE. Recommended: 3 (approx. 9s)"
 
 msgid "恢复判定次数"
-msgstr "恢复判定次数"
+msgstr "Recovery Count Threshold"
 
 msgid "切换到 LTE 后，连续成功多少次才切回 WAN（防止来回抖动），建议 5"
-msgstr "切换到 LTE 后，连续成功多少次才切回 WAN（防止来回抖动），建议 5"
+msgstr "After switching to LTE, number of consecutive successes required to switch back to WAN (prevents ping-pong effect). Recommended: 5"
 
 msgid "Ping 超时（秒）"
-msgstr "Ping 超时（秒）"
+msgstr "Ping Timeout (Seconds)"
 
 msgid "单次 Ping 的等待超时，建议 2"
-msgstr "单次 Ping 的等待超时，建议 2"
+msgstr "Timeout for a single ping. Recommended: 2"
 
 msgid "高级路由设置"
-msgstr "高级路由设置"
+msgstr "Advanced Routing Settings"
 
 msgid "WAN 路由 Metric"
-msgstr "WAN 路由 Metric"
+msgstr "WAN Routing Metric"
 
 msgid "有线 WAN 的路由优先级，数值越小越优先，默认 10"
-msgstr "有线 WAN 的路由优先级，数值越小越优先，默认 10"
+msgstr "Routing priority for wired WAN, smaller value has higher priority. Default: 10"
 
 msgid "LTE 路由 Metric（备用时）"
-msgstr "LTE 路由 Metric（备用时）"
+msgstr "LTE Routing Metric (When Standby)"
 
 msgid "LTE 处于备用状态时的路由 Metric，应大于 WAN，默认 100"
-msgstr "LTE 处于备用状态时的路由 Metric，应大于 WAN，默认 100"
+msgstr "Routing metric when LTE is in standby, should be greater than WAN metric. Default: 100"
 
 msgid "Ping 检测目标"
-msgstr "Ping 检测目标"
+msgstr "Ping Test Targets"
 
 msgid "WAN 检测时会依次 Ping 以下 IP，任意一个成功即认为 WAN 正常。建议保留多个备用目标。"
-msgstr "WAN 检测时会依次 Ping 以下 IP，任意一个成功即认为 WAN 正常。建议保留多个备用目标。"
+msgstr "The system will ping the following IPs in sequence. WAN is considered normal if any succeed. It is recommended to keep multiple targets."
 
 msgid "目标 IP"
-msgstr "目标 IP"
+msgstr "Target IP"
 
 msgid "故障通知（可选）"
-msgstr "故障通知（可选）"
+msgstr "Failure Notification (Optional)"
 
 msgid "网络切换时通过 Webhook 推送消息到钉钉/企业微信/飞书"
-msgstr "网络切换时通过 Webhook 推送消息到钉钉/企业微信/飞书"
+msgstr "Push messages via Webhook to DingTalk/WeCom/Feishu/Custom Webhook during network switching."
 
 msgid "启用通知"
-msgstr "启用通知"
+msgstr "Enable Notifications"
 
 msgid "通知平台"
-msgstr "通知平台"
+msgstr "Notification Platform"
 
 msgid "钉钉机器人"
-msgstr "钉钉机器人"
+msgstr "DingTalk Bot"
 
 msgid "企业微信机器人"
-msgstr "企业微信机器人"
+msgstr "WeCom Bot"
 
 msgid "飞书机器人"
-msgstr "飞书机器人"
+msgstr "Feishu Bot"
 
 msgid "自定义 Webhook"
-msgstr "自定义 Webhook"
+msgstr "Custom Webhook"
 
 msgid "Webhook URL"
 msgstr "Webhook URL"
 
 msgid "在对应平台创建群机器人后复制 Webhook 地址"
-msgstr "在对应平台创建群机器人后复制 Webhook 地址"
-
+msgstr "Create a group bot on the corresponding platform and copy the Webhook URL."
