@@ -9,7 +9,7 @@ on:
   release:
     types: [created]
 
-# Mengizinkan akun hasil fork untuk membuat halaman rilis otomatis
+# Mengizinkan akun hasil fork Anda membuat halaman rilis otomatis
 permissions:
   contents: write
 
@@ -48,12 +48,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # REVISI 1: Memperbaiki tautan SDK x86_64 menggunakan format .tar.xz resmi OpenWrt 24.10.7
+          # Target 1: x86 (64-bit) untuk PC / Mini PC / Proxmox
           - target: x86
             subtarget: 64
             sdk_url: https://openwrt.org
             
-          # REVISI 2: Memperbaiki jalur target Meson Amlogic & format file ke .tar.xz
+          # Target 2: ARM64 STB Amlogic (HG680P, B860H, dll.)
           - target: meson
             subtarget: generic
             sdk_url: https://openwrt.org
@@ -64,7 +64,7 @@ jobs:
         with:
           path: plugin
 
-      - name: Memasang Dependensi Sistem Linux
+      - name: Memasang Dependensi Linux & Alat Ekstraksi ZSTD
         run: |
           sudo apt-get update -q
           sudo apt-get install -y \
@@ -79,16 +79,17 @@ jobs:
             unzip \
             python3 \
             wget \
-            curl
+            curl \
+            zstd
 
-      - name: Mengunduh dan Mengekstrak SDK OpenWrt
+      - name: Mengunduh dan Mengekstrak SDK OpenWrt (.tar.zst)
         run: |
           wget -q --show-progress \
             "${{ matrix.sdk_url }}" \
-            -O sdk.tar.xz
+            -O sdk.tar.zst
           mkdir -p sdk
-          tar -xf sdk.tar.xz -C sdk --strip-components=1
-          rm sdk.tar.xz
+          tar --use-compress-program=unzstd -xf sdk.tar.zst -C sdk --strip-components=1
+          rm sdk.tar.zst
           echo "=== Struktur Direktori SDK Berhasil Dibuat ==="
           ls sdk/
 
@@ -141,7 +142,7 @@ jobs:
           ls -lah output/
 
       - name: Mengunggah File ke Menu Artifacts GitHub
-        uses: actions/actions-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
           name: ipk-${{ matrix.target }}-${{ matrix.subtarget }}
           path: output/*.ipk
@@ -179,10 +180,10 @@ jobs:
             opkg update
             opkg install /tmp/luci-app-qmodem-failover_*_all.ipk
             ```
-            ## Kompatibilitas Sistem (Dikompilasi via SDK 24.10.7)
+            ## Kompatibilitas Sistem (Dikompilasi via SDK 24.10.7 Terbaru)
             - **x86_64** (PC / Mini PC / Router X86 / Proxmox)
             - **ARM64 Amlogic** (STB TV Box HG680P, B860H, dll.)
             
-            > Catatan: Paket ini menggunakan arsitektur `PKGARCH=all`, sehingga file `.ipk` yang dihasilkan dapat saling ditukar dan dipasang pada kedua jenis perangkat di atas.
+            > Catatan: Paket ini menggunakan arsitektur `PKGARCH=all`, sehingga file `.ipk` yang dihasilkan bersifat universal untuk seluruh perangkat di atas.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
