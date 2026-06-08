@@ -9,20 +9,21 @@ on:
   release:
     types: [created]
 
+# Mengizinkan akun hasil fork untuk membuat halaman rilis otomatis
 permissions:
   contents: write
 
 jobs:
   lint:
-    name: Shell Script Lint
+    name: Uji Validasi Skrip (Shell Lint)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install shellcheck
+      - name: Pasang Shellcheck
         run: sudo apt-get install -y shellcheck
 
-      - name: Lint shell scripts
+      - name: Menjalankan Lint pada Skrip Shell
         run: |
           shellcheck \
             src/qmodem-failover.sh \
@@ -47,37 +48,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # REVISI 1: Memperbaiki tautan SDK x86_64 menggunakan format .tar.xz resmi OpenWrt 24.10.7
           - target: x86
             subtarget: 64
             sdk_url: https://openwrt.org
-
+            
+          # REVISI 2: Memperbaiki jalur target Meson Amlogic & format file ke .tar.xz
           - target: meson
             subtarget: generic
             sdk_url: https://openwrt.org
 
-          - target: armvirt
-            subtarget: 64
-            sdk_url: https://openwrt.org
-
-          - target: ramips
-            subtarget: mt7621
-            sdk_url: https://openwrt.org
-
-          - target: ath79
-            subtarget: generic
-            sdk_url: https://openwrt.org
-
-          - target: mediatek
-            subtarget: mt7622
-            sdk_url: https://openwrt.org
-
     steps:
-      - name: Checkout plugin source
+      - name: Mengunduh Sumber Repositori (Checkout)
         uses: actions/checkout@v4
         with:
           path: plugin
 
-      - name: Install dependencies
+      - name: Memasang Dependensi Sistem Linux
         run: |
           sudo apt-get update -q
           sudo apt-get install -y \
@@ -94,7 +81,7 @@ jobs:
             wget \
             curl
 
-      - name: Download and extract SDK
+      - name: Mengunduh dan Mengekstrak SDK OpenWrt
         run: |
           wget -q --show-progress \
             "${{ matrix.sdk_url }}" \
@@ -102,16 +89,16 @@ jobs:
           mkdir -p sdk
           tar -xf sdk.tar.xz -C sdk --strip-components=1
           rm sdk.tar.xz
-          echo "=== Struktur Direktori SDK ==="
+          echo "=== Struktur Direktori SDK Berhasil Dibuat ==="
           ls sdk/
 
-      - name: Copy plugin into SDK packages
+      - name: Menyalin Paket ke Dalam Sistem Kompilasi SDK
         run: |
           PKG_DIR="sdk/package/luci-app-qmodem-failover"
           echo "=== Bersihkan dan Buat Folder Paket ==="
           rm -rf "$PKG_DIR"
           mkdir -p "$PKG_DIR"
-          echo "=== Menyalin File Sumber ==="
+          echo "=== Proses Menyalin File Sumber ==="
           cp    plugin/Makefile  "$PKG_DIR/"
           cp -r plugin/src       "$PKG_DIR/"
           cp -r plugin/luasrc    "$PKG_DIR/"
@@ -123,82 +110,79 @@ jobs:
             echo "❌ Terdeteksi folder sdk bersarang, batalkan!"
             exit 1
           fi
-          echo "✅ Folder paket aman"
+          echo "✅ Folder paket dinyatakan bersih"
 
-      - name: Update feeds
+      - name: Memperbarui Feed Paket SDK
         run: |
           cd sdk
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Configure and compile
+      - name: Konfigurasi dan Mulai Kompilasi IPK
         run: |
           cd sdk
           echo "CONFIG_PACKAGE_luci-app-qmodem-failover=m" > .config
           make defconfig 2>&1 | tail -5
-          echo "=== Memulai Proses Kompilasi ==="
+          echo "=== Memulai Proses Kompilasi Aplikasi ==="
           make package/luci-app-qmodem-failover/compile \
             V=s -j$(nproc) 2>&1 | tail -30
-          echo "=== Mencari File IPK ==="
+          echo "=== Mencari File Hasil Rilis (.ipk) ==="
           find bin/ -name "*qmodem*.ipk" -ls
           find bin/ -name "*qmodem*.ipk" | grep -q . \
-            && echo "✅ Kompilasi Berhasil" \
-            || { echo "❌ File IPK Tidak Ditemukan"; exit 1; }
+            && echo "✅ Kompilasi Paket Berhasil!" \
+            || { echo "❌ File IPK Tidak Ditemukan!"; exit 1; }
 
-      - name: Collect IPK
+      - name: Mengumpulkan File Hasil Build
         run: |
           mkdir -p output
           find sdk/bin -name "*qmodem*.ipk" \
             -exec cp {} output/ \;
-          echo "=== Riwayat File Output ==="
+          echo "=== Daftar File Output ==="
           ls -lah output/
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Mengunggah File ke Menu Artifacts GitHub
+        uses: actions/actions-artifact@v4
         with:
           name: ipk-${{ matrix.target }}-${{ matrix.subtarget }}
           path: output/*.ipk
           retention-days: 30
 
   release:
-    name: Publish Release
+    name: Membuat Halaman Rilis Publik (Publish)
     runs-on: ubuntu-22.04
     needs: build
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
 
     steps:
-      - name: Download all artifacts
+      - name: Mengunduh Seluruh Hasil Kompilasi Artifacts
         uses: actions/download-artifact@v4
         with:
           path: all-ipks
           pattern: ipk-*
 
-      - name: Collect IPKs
+      - name: Menyatukan File IPK
         run: |
           mkdir -p release-files
           find all-ipks -name "*.ipk" -exec cp {} release-files/ \;
           ls -lah release-files/
 
-      - name: Upload to Release
+      - name: Mengunggah File ke Halaman Release GitHub
         uses: softprops/action-gh-release@v2
         with:
           files: release-files/*.ipk
           tag_name: v${{ github.run_number }}
-          name: Release Build v${{ github.run_number }}
+          name: Rilis Resmi Paket v${{ github.run_number }}
           body: |
-            ## Cara Instalasi di Router / STB
+            ## Cara Instalasi di Router / STB Anda
             ```bash
             scp luci-app-qmodem-failover_*_all.ipk root@192.168.1.1:/tmp/
             opkg update
             opkg install /tmp/luci-app-qmodem-failover_*_all.ipk
             ```
-            ## Kompatibilitas Perangkat (OpenWrt 23.05.3)
+            ## Kompatibilitas Sistem (Dikompilasi via SDK 24.10.7)
             - **x86_64** (PC / Mini PC / Router X86 / Proxmox)
             - **ARM64 Amlogic** (STB TV Box HG680P, B860H, dll.)
-            - **MIPS mt7621** (Xiaomi, Redmi, Phicomm)
-            - **MIPS ath79** (TP-Link, Huawei)
-            - **ARM mt7622** (Xiaomi AX Series)
             
-            > Catatan: Karena paket ini menggunakan sistem kustomisasi `PKGARCH=all`, file `.ipk` yang dihasilkan bersifat universal untuk seluruh arsitektur di atas.
+            > Catatan: Paket ini menggunakan arsitektur `PKGARCH=all`, sehingga file `.ipk` yang dihasilkan dapat saling ditukar dan dipasang pada kedua jenis perangkat di atas.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
