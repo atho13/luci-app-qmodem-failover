@@ -9,7 +9,6 @@ on:
   release:
     types: [created]
 
-# REVISI 1: Wajib diaktifkan agar akun hasil fork diizinkan mengunggah file ke halaman Release
 permissions:
   contents: write
 
@@ -48,32 +47,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # REVISI 2: Target x86 (64-bit) untuk PC / Mini PC / Proxmox
           - target: x86
             subtarget: 64
             sdk_url: https://openwrt.org
 
-          # REVISI 3: Target ARM64 STB Amlogic (Arsitektur Meson Generic)
           - target: meson
             subtarget: generic
             sdk_url: https://openwrt.org
 
-          # REVISI 4: Target ARM64 Virtual (Sering digunakan di firmware STB modifikasi Flippy)
           - target: armvirt
             subtarget: 64
             sdk_url: https://openwrt.org
 
-          # Target Router MediaTek (Bawaan repositori asli)
           - target: ramips
             subtarget: mt7621
             sdk_url: https://openwrt.org
 
-          # Target Router Qualcomm Atheros (Bawaan repositori asli)
           - target: ath79
             subtarget: generic
             sdk_url: https://openwrt.org
 
-          # Target Router MediaTek AX (Bawaan repositori asli)
           - target: mediatek
             subtarget: mt7622
             sdk_url: https://openwrt.org
@@ -171,7 +164,6 @@ jobs:
     name: Publish Release
     runs-on: ubuntu-22.04
     needs: build
-    # Memicu pembuatan halaman rilis baik lewat menu Release maupun tombol manual Actions
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
 
     steps:
@@ -184,7 +176,6 @@ jobs:
       - name: Collect IPKs
         run: |
           mkdir -p release-files
-          # REVISI 5: Menyalin semua IPK tanpa dibatasi head -1 agar paket x86 dan arm64 aman terkumpul bersamaan
           find all-ipks -name "*.ipk" -exec cp {} release-files/ \;
           ls -lah release-files/
 
