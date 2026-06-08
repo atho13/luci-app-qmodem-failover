@@ -13,7 +13,8 @@ define Package/luci-app-qmodem-failover
   SECTION:=luci
   CATEGORY:=LuCI
   SUBMENU:=3. Applications
-  TITLE:=QMODEM Failover - 有线故障自动切换移动网络
+  # REVISI 1: Membersihkan teks Mandarin pada Judul Menu LuCI
+  TITLE:=QMODEM Failover - Auto Switch Wired WAN to Mobile Network
   DEPENDS:=+luci-base +kmod-usb-net +kmod-usb-net-rndis \
            +kmod-usb-net-cdc-ether +uci +curl +ip-full +ubus
   PKGARCH:=all
@@ -23,8 +24,7 @@ endef
 define Package/luci-app-qmodem-failover/description
   Auto-switches to QMODEM LTE when wired WAN fails.
   Auto-switches back on recovery. Switch time under 15 seconds.
-  有线WAN故障时自动切换QMODEM移动网络，恢复后自动切回。
-  PKGARCH=all 全平台通用 x86_64/arm/aarch64/mipsel。
+  Universal architecture (x86_64/arm/aarch64/mipsel).
 endef
 
 define Package/luci-app-qmodem-failover/conffiles
@@ -40,6 +40,11 @@ define Build/Prepare
 endef
 
 define Build/Compile
+	# REVISI 2: Memaksa compiler OpenWrt memproses berkas .po Bahasa Inggris Anda menjadi format biner .lmo LuCI
+	mkdir -p $(PKG_BUILD_DIR)/po/bin
+	$(foreach po,$(wildcard ./po/*.po), \
+		po2lmo $(po) $(PKG_BUILD_DIR)/po/bin/$(patsubst %.po,%.lmo,$(notdir $(po))); \
+	)
 endef
 
 define Package/luci-app-qmodem-failover/install
@@ -67,7 +72,10 @@ define Package/luci-app-qmodem-failover/install
 	$(INSTALL_DIR) $(1)/htdocs/luci-static/qmodem_failover
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/htdocs/luci-static/qmodem_failover/status.js \
 	                $(1)/htdocs/luci-static/qmodem_failover/status.js
+	
+	# REVISI 3: Menyalin hasil konversi bahasa biner (.lmo) ke direktori i18n OpenWrt agar terbaca di Web LuCI
 	$(INSTALL_DIR) $(1)/usr/share/luci/i18n
+	[ -d $(PKG_BUILD_DIR)/po/bin ] && $(CP) $(PKG_BUILD_DIR)/po/bin/*.lmo $(1)/usr/share/luci/i18n/ || true
 endef
 
 define Package/luci-app-qmodem-failover/postinst
