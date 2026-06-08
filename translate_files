@@ -60,7 +60,7 @@ if __name__ == "__main__":
     for root, _, files in os.walk(target_folder):
         for file_name in files:
             file_path = os.path.join(root, file_name)
-            if file_path.endswith((".txt", ".init", ".config", ".js" ".log", ".json", ".lua", ".sh")):
+            if file_path.endswith((".txt", ".init", ".config", ".js", ".log", ".json", ".lua", ".sh")):
                 files_to_translate.append(file_path)
 
     print(f"Found {len(files_to_translate)} files to translate.")
