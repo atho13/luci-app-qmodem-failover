@@ -51,12 +51,12 @@ jobs:
           # Target 1: x86 (64-bit) untuk PC / Mini PC / Proxmox
           - target: x86
             subtarget: 64
-            sdk_url: https://openwrt.org
+            sdk_url: https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
             
           # Target 2: ARM64 STB Amlogic (HG680P, B860H, dll.)
           - target: meson
             subtarget: generic
-            sdk_url: https://openwrt.org
+            sdk_url: https://downloads.openwrt.org/releases/24.10.7/targets/armsr/armv8/openwrt-sdk-24.10.7-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
 
     steps:
       - name: Mengunduh Sumber Repositori (Checkout)
